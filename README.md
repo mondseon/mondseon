@@ -79,9 +79,9 @@ I build front-end products with a focus on clean interaction, practical engineer
 ## Contribution Flow
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mondseon/mondseon/output/github-contribution-grid-snake-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/mondseon/mondseon/output/github-contribution-grid-snake.svg">
-  <img alt="github contribution grid snake animation" src="https://raw.githubusercontent.com/mondseon/mondseon/output/github-contribution-grid-snake.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="./assets/github-contribution-grid-snake-growing-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/github-contribution-grid-snake-growing.svg">
+  <img alt="github contribution grid snake animation" src="./assets/github-contribution-grid-snake-growing.svg">
 </picture>
 
 <div align="center">
