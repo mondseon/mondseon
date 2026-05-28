@@ -9,10 +9,10 @@ const COLS = 53;
 const ROWS = 7;
 const WIDTH = COLS * CELL + GAP;
 const HEIGHT = ROWS * CELL + 72;
-const DURATION = 32000;
-const INITIAL_LENGTH = 4;
-const STEP_COUNT = 80;
-const BODY_SEGMENTS = 18;
+const DURATION = 20000;
+const INITIAL_LENGTH = 1;
+const MAX_LENGTH = 18;
+let STEP_COUNT = 0;
 
 const themes = {
   light: {
@@ -22,7 +22,6 @@ const themes = {
     levels: ["#9be9a8", "#40c463", "#30a14e", "#216e39"],
     snake: "#8b5cf6",
     snakeHead: "#22c55e",
-    food: "#f97316",
     background: "transparent",
   },
   dark: {
@@ -32,7 +31,6 @@ const themes = {
     levels: ["#01311f", "#034525", "#0f6d31", "#00c647"],
     snake: "#a78bfa",
     snakeHead: "#22c55e",
-    food: "#f59e0b",
     background: "transparent",
   },
 };
@@ -91,7 +89,9 @@ const contributions = new Map([
 ]);
 
 const pathPoints = [
-  [0, -1],
+  [0, 1],
+  [0, 2],
+  [0, 3],
   [0, 4],
   [22, 4],
   [22, 5],
@@ -151,7 +151,7 @@ const pathPoints = [
   [8, 2],
   [8, 1],
   [6, 1],
-  [6, -1],
+  [6, 0],
 ];
 
 function expandPath(points) {
@@ -176,6 +176,8 @@ function expandPath(points) {
   return expanded;
 }
 
+STEP_COUNT = expandPath(pathPoints).length - 1;
+
 function pct(step) {
   return `${((step / STEP_COUNT) * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
 }
@@ -192,7 +194,7 @@ function keyframes(name, frames) {
   return `@keyframes ${name}{${body}}`;
 }
 
-function uniquePositionKeyframes(points, transformForStep) {
+function uniquePositionKeyframes(transformForStep) {
   const frames = [];
   let previous = "";
 
@@ -208,7 +210,27 @@ function uniquePositionKeyframes(points, transformForStep) {
 }
 
 function currentLength(step, eatenSteps) {
-  return INITIAL_LENGTH + eatenSteps.filter((foodStep) => foodStep <= step).length;
+  return Math.min(
+    MAX_LENGTH,
+    INITIAL_LENGTH + eatenSteps.filter((foodStep) => foodStep <= step).length,
+  );
+}
+
+function pointAt(points, index) {
+  if (index >= 0) {
+    return points[Math.min(index, points.length - 1)];
+  }
+
+  const first = points[0];
+  const second = points[1] || first;
+  const backX = first.x - second.x;
+  const backY = first.y - second.y;
+  const distance = Math.abs(index);
+
+  return {
+    x: first.x + backX * distance,
+    y: first.y + backY * distance,
+  };
 }
 
 function foodEvents(points) {
@@ -226,66 +248,98 @@ function foodEvents(points) {
   return events;
 }
 
-function buildStyle(theme, points, events) {
+function selectFoodEvents(events) {
+  return events;
+}
+
+function buildStyle(theme, points, events, totalSegments) {
   const eatenSteps = events.map((event) => event.step);
   const styles = [
-    `:root{--empty:${theme.empty};--stroke:${theme.stroke};--snake:${theme.snake};--head:${theme.snakeHead};--food:${theme.food};--bg:${theme.background};--c1:${theme.levels[0]};--c2:${theme.levels[1]};--c3:${theme.levels[2]};--c4:${theme.levels[3]}}`,
+    `:root{--empty:${theme.empty};--stroke:${theme.stroke};--snake:${theme.snake};--head:${theme.snakeHead};--bg:${theme.background};--c1:${theme.levels[0]};--c2:${theme.levels[1]};--c3:${theme.levels[2]};--c4:${theme.levels[3]}}`,
     `.cell{shape-rendering:geometricPrecision;fill:var(--empty);stroke:var(--stroke);stroke-width:1px;width:${DOT}px;height:${DOT}px}`,
     `.lvl1{fill:var(--c1)}.lvl2{fill:var(--c2)}.lvl3{fill:var(--c3)}.lvl4{fill:var(--c4)}`,
-    `.food{fill:var(--food);transform-box:fill-box;transform-origin:center;animation:${DURATION}ms linear infinite}`,
-    `.body,.head{shape-rendering:geometricPrecision;animation:${DURATION}ms steps(1,end) infinite}`,
-    `.body{fill:var(--snake);opacity:0}`,
-    `.head{fill:var(--head)}`,
+    `.eaten{animation:${DURATION}ms linear infinite}`,
+    `.body,.head{shape-rendering:geometricPrecision}`,
+    `.body{fill:var(--snake);opacity:0;filter:drop-shadow(0 0 2px color-mix(in srgb, var(--snake) 55%, white))}`,
+    `.head{fill:var(--head);filter:drop-shadow(0 0 4px color-mix(in srgb, var(--head) 60%, white))}`,
     keyframes(
       "head",
-      uniquePositionKeyframes(points, (step) => {
-        const { x, y } = center(points[Math.min(step, points.length - 1)]);
+      uniquePositionKeyframes((step) => {
+        const { x, y } = center(pointAt(points, step));
         return `transform:translate(${x}px,${y}px)`;
       }),
     ),
   ];
 
-  for (let segment = 1; segment <= BODY_SEGMENTS; segment += 1) {
-    styles.push(
-      keyframes(
-        `body${segment}`,
-        uniquePositionKeyframes(points, (step) => {
-          const length = currentLength(step, eatenSteps);
-          const sourceIndex = step - segment;
-          if (segment >= length || sourceIndex < 0) {
-            return "opacity:0;transform:translate(0px,-48px)";
-          }
+  for (let segment = 1; segment <= totalSegments; segment += 1) {
+    const moveFrames = uniquePositionKeyframes((step) => {
+      const sourceIndex = step - segment;
+      const { x, y } = center(pointAt(points, sourceIndex));
+      return `transform:translate(${x}px,${y}px)`;
+    });
+    const opacityFrames = [];
+    let previousOpacity = "";
 
-          const { x, y } = center(points[Math.min(sourceIndex, points.length - 1)]);
-          return `opacity:1;transform:translate(${x}px,${y}px)`;
-        }),
-      ),
-    );
+    for (let step = 0; step <= STEP_COUNT; step += 1) {
+      const length = currentLength(step, eatenSteps);
+      const sourceIndex = step - segment;
+      const visible = segment < length && (sourceIndex >= 0 || segment < INITIAL_LENGTH);
+      const opacity = visible ? "opacity:1" : "opacity:0";
+
+      if (opacity !== previousOpacity || step === 0 || step === STEP_COUNT) {
+        opacityFrames.push([pct(step), opacity]);
+        previousOpacity = opacity;
+      }
+    }
+
+    styles.push(keyframes(`bodyMove${segment}`, moveFrames));
+    styles.push(keyframes(`bodyShow${segment}`, opacityFrames));
   }
 
   events.forEach((event, index) => {
+    const level = contributions.get(event.key) || 1;
+    const colorVar = `var(--c${Math.min(level, 4)})`;
     styles.push(
-      keyframes(`food${index}`, [
-        ["0%", "opacity:1;transform:scale(1)"],
-        [pct(Math.max(event.step - 1, 0)), "opacity:1;transform:scale(1)"],
-        [pct(event.step), "opacity:0;transform:scale(.2)"],
-        ["100%", "opacity:0;transform:scale(.2)"],
+      keyframes(`eatCell${index}`, [
+        ["0%", `fill:${colorVar};opacity:1`],
+        [pct(Math.max(event.step - 1, 0)), `fill:${colorVar};opacity:1`],
+        [pct(event.step), `fill:var(--head);opacity:1`],
+        [pct(Math.min(event.step + 1, STEP_COUNT)), `fill:var(--empty);opacity:1`],
+        ["100%", "fill:var(--empty);opacity:1"],
       ]),
     );
   });
 
+  styles.push(
+    keyframes("foodProgress", [
+      ["0%", "transform:scaleX(0)"],
+      ["75%", "transform:scaleX(1)"],
+      ["100%", "transform:scaleX(0)"],
+    ]),
+  );
+
   return styles.join("");
 }
 
-function renderCells(theme) {
+function renderCells(events) {
   const cells = [];
+  const eatenCells = new Map(events.map((event, index) => [event.key, index]));
 
   for (let x = 0; x < COLS; x += 1) {
     for (let y = 0; y < ROWS; y += 1) {
-      const level = contributions.get(`${x},${y}`) || 0;
-      const className = level ? `cell lvl${level}` : "cell";
+      const key = `${x},${y}`;
+      const level = contributions.get(key) || 0;
+      const eatenIndex = eatenCells.has(key) ? eatenCells.get(key) : -1;
+      const classes = ["cell"];
+      if (level) {
+        classes.push(`lvl${level}`);
+      }
+      if (eatenIndex !== -1) {
+        classes.push("eaten");
+      }
+      const style = eatenIndex !== -1 ? ` style="animation-name:eatCell${eatenIndex}"` : "";
       cells.push(
-        `<rect class="${className}" x="${x * CELL + 2}" y="${y * CELL + 2}" rx="2" ry="2"/>`,
+        `<rect class="${classes.join(" ")}" x="${x * CELL + 2}" y="${y * CELL + 2}" rx="2" ry="2"${style}/>`,
       );
     }
   }
@@ -293,40 +347,30 @@ function renderCells(theme) {
   return cells.join("");
 }
 
-function renderFoods(events) {
-  return events
-    .map((event, index) => {
-      const x = event.point.x * CELL + 4;
-      const y = event.point.y * CELL + 4;
-      return `<circle class="food" cx="${x + 6}" cy="${y + 6}" r="5" style="animation-name:food${index}"/>`;
-    })
-    .join("");
-}
-
-function renderSnake() {
+function renderSnake(totalSegments) {
   const body = [];
 
-  for (let segment = BODY_SEGMENTS; segment >= 1; segment -= 1) {
+  for (let segment = totalSegments; segment >= 1; segment -= 1) {
     const opacity = segment < INITIAL_LENGTH ? 1 : 0;
     body.push(
-      `<rect class="body" x="2.4" y="2.4" width="11.2" height="11.2" rx="4" ry="4" style="opacity:${opacity};animation-name:body${segment}"/>`,
+      `<rect class="body" x="2.4" y="2.4" width="11.2" height="11.2" rx="4" ry="4" style="opacity:${opacity};animation-name:bodyMove${segment},bodyShow${segment};animation-duration:${DURATION}ms,${DURATION}ms;animation-timing-function:linear,steps(1,end);animation-iteration-count:infinite,infinite"/>`,
     );
   }
 
   body.push(
-    `<rect class="head" x="1.2" y="1.2" width="13.6" height="13.6" rx="4.5" ry="4.5" style="animation-name:head"/>`,
+    `<rect class="head" x="1.2" y="1.2" width="13.6" height="13.6" rx="4.5" ry="4.5" style="animation:${DURATION}ms linear infinite;animation-name:head"/>`,
   );
 
   return body.join("");
 }
 
 function renderSvg(theme) {
-  const points = expandPath(pathPoints).slice(0, STEP_COUNT + 1);
-  const events = foodEvents(points).slice(0, BODY_SEGMENTS - INITIAL_LENGTH);
-  const style = buildStyle(theme, points, events);
-  const cells = renderCells(theme);
-  const foods = renderFoods(events);
-  const snake = renderSnake();
+  const points = expandPath(pathPoints);
+  const events = selectFoodEvents(foodEvents(points));
+  const totalSegments = MAX_LENGTH;
+  const style = buildStyle(theme, points, events, totalSegments);
+  const cells = renderCells(events);
+  const snake = renderSnake(totalSegments);
   const progressY = ROWS * CELL + 32;
 
   return [
@@ -336,11 +380,9 @@ function renderSvg(theme) {
     `<style>${style}</style>`,
     `<rect width="${WIDTH + 32}" height="${HEIGHT}" x="-16" y="-32" fill="var(--bg)"/>`,
     cells,
-    foods,
     snake,
     `<rect x="0" y="${progressY}" width="${COLS * CELL}" height="12" rx="6" fill="var(--empty)" stroke="var(--stroke)"/>`,
-    `<rect x="0" y="${progressY}" width="${COLS * CELL}" height="12" rx="6" fill="var(--head)" opacity=".72">`,
-    `<animate attributeName="width" values="0;${COLS * CELL};0" dur="${DURATION}ms" repeatCount="indefinite"/>`,
+    `<rect x="0" y="${progressY}" width="${COLS * CELL}" height="12" rx="6" fill="var(--head)" opacity=".72" style="transform-origin:0 ${progressY}px;animation:foodProgress ${DURATION}ms ease-in-out infinite">`,
     `</rect>`,
     `</svg>`,
   ].join("");
