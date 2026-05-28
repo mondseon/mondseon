@@ -123,9 +123,15 @@ const pathPoints = [
   [45, 1],
   [45, 2],
   [46, 2],
+  [46, 3],
   [46, 1],
+  [50, 1],
+  [51, 1],
+  [51, 2],
+  [51, 1],
   [49, 1],
   [49, 4],
+  [47, 4],
   [48, 4],
   [48, 3],
   [47, 3],
@@ -144,6 +150,9 @@ const pathPoints = [
   [51, 4],
   [51, 3],
   [48, 2],
+  [49, 2],
+  [49, 6],
+  [49, 5],
   [48, 5],
   [44, 5],
   [50, 5],
@@ -310,14 +319,6 @@ function buildStyle(theme, points, events, totalSegments) {
     );
   });
 
-  styles.push(
-    keyframes("foodProgress", [
-      ["0%", "transform:scaleX(0)"],
-      ["75%", "transform:scaleX(1)"],
-      ["100%", "transform:scaleX(0)"],
-    ]),
-  );
-
   return styles.join("");
 }
 
@@ -371,7 +372,6 @@ function renderSvg(theme) {
   const style = buildStyle(theme, points, events, totalSegments);
   const cells = renderCells(events);
   const snake = renderSnake(totalSegments);
-  const progressY = ROWS * CELL + 32;
 
   return [
     `<svg viewBox="-16 -32 ${WIDTH + 32} ${HEIGHT}" width="${WIDTH + 32}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">`,
@@ -381,9 +381,6 @@ function renderSvg(theme) {
     `<rect width="${WIDTH + 32}" height="${HEIGHT}" x="-16" y="-32" fill="var(--bg)"/>`,
     cells,
     snake,
-    `<rect x="0" y="${progressY}" width="${COLS * CELL}" height="12" rx="6" fill="var(--empty)" stroke="var(--stroke)"/>`,
-    `<rect x="0" y="${progressY}" width="${COLS * CELL}" height="12" rx="6" fill="var(--head)" opacity=".72" style="transform-origin:0 ${progressY}px;animation:foodProgress ${DURATION}ms ease-in-out infinite">`,
-    `</rect>`,
     `</svg>`,
   ].join("");
 }
